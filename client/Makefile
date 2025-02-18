@@ -2,7 +2,7 @@
 
 TEST_TARGET=$(if $(COVERAGE),test-coverage,test)
 
-MODULES:=project_name tests
+MODULES:=client tests
 
 setup-dev: setup
 	pip install -e .["dev"]
