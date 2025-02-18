@@ -4,9 +4,11 @@ disable=
     fixme,
     invalid-name,
     too-few-public-methods,
+    too-many-public-methods,
 
 max-args=10
 max-attributes=10
+max-line-length=200
 
 [REPORTS]
 output-format=text

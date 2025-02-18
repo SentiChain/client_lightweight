@@ -12,10 +12,7 @@ if platform.system() != "Windows" and (
     sys.exit(1)
 
 install_requires = [
-    "numpy==1.24.3",
-    "pandas==1.4.2",
-    "matplotlib==3.5.1",
-    "matplotlib-inline==0.1.3",
+    "requests",
 ]
 
 extras_require = {
@@ -40,9 +37,9 @@ extras_require["dev"] = list(
 )
 
 setup(
-    name="project_name",
-    version="0.1",
-    description="Project Name",
+    name="client_lightweight",
+    version="1.0",
+    description="SentiChain Python Client",
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=install_requires,
