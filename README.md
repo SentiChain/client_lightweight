@@ -91,4 +91,4 @@ if __name__ == "__main__":
 
 ## Supports
 
-Contributions, bug reports, and feature requets are welcome! Feel free to email us at info@sentichain.com
+Contributions, bug reports, and feature requests are welcome! Feel free to email us at info@sentichain.com
