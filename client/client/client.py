@@ -124,7 +124,7 @@ class Client:
         Otherwise, it is hidden.
         """
         resp = requests.get(
-            f"{self.base_url}/mapper/get_points_by_block_no_embedding?block_number={block_number}",
+            f"{self.base_url}/mapper/get_points_by_block_no_embedding?block_number={block_number}&api_key={self.api_key}",
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -140,7 +140,7 @@ class Client:
         Otherwise, they are hidden.
         """
         resp = requests.get(
-            f"{self.base_url}/mapper/get_points_by_block_range_no_embedding?start_block={start_block}&end_block={end_block}",
+            f"{self.base_url}/mapper/get_points_by_block_range_no_embedding?start_block={start_block}&end_block={end_block}&api_key={self.api_key}",
         )
         if resp.status_code == 200:
             data = resp.json()
