@@ -122,6 +122,20 @@ class TestClient(unittest.TestCase):
             "Expected a valid points response for a block range (could be empty).",
         )
 
+    def test_09_get_reasoning_match_chunk_end(self) -> None:
+        """
+        Retrieve reasoning for the last available chunk whose chunk_end is
+        less and equal to user_chunk_end, for the given ticker and summary_type.
+        """
+        reasoning = self.client_user.get_reasoning_match_chunk_end(  # type: ignore
+            ticker="DOGE", summary_type="observation_public", user_chunk_end=200  # type: ignore
+        )
+        # If there's no data for that chunk end, `reasoning` could be None or an empty str.
+        self.assertIsNotNone(
+            reasoning,
+            "Expected a valid reasoning response (could be empty).",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
