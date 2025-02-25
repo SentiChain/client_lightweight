@@ -7,6 +7,7 @@ This library provides convenience methods for:
 - [API Balance](https://sentichain.com/app?tab=APIBalance): Retrieve user information (e.g., remaining points).
 - [Block Explorer](https://sentichain.com/app?tab=BlockExplorer): Get chain length, last block time, total transactions, etc.
 - [Event Map](https://sentichain.com/app?tab=EventMap): Retrieve event map data for specified block ranges.
+- [Observation](https://sentichain.com/app?tab=Observation): Retrieve reasoning for specified ticker, summary type and block chunk end.
 
 ## Table of Contents
 
@@ -29,6 +30,8 @@ This library provides convenience methods for:
 - Event Map
   - Fetch maximum block number processed in the event map.
   - Retrieve “points” snapshots for a specific block or for a range of blocks.
+- Observation
+  - Retrieve reasoning for specified ticker, summary type and block chunk end.
 
 ## Requirements
 
@@ -84,6 +87,10 @@ def main():
     # Fetch data for a specific block
     block_data = client.get_block_by_number(network="testnet", block_number=50)
     print("Block #50 data:", block_data)
+
+    # Fetch reasoning for a specific ticker, summary type and block chunk end
+    reasoning = client.get_reasoning_match_chunk_end(ticker="DOGE", summary_type="observation_public", user_chunk_end=200)
+    print("Observation:", reasoning)
 
 if __name__ == "__main__":
     main()

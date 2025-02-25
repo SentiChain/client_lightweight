@@ -124,7 +124,7 @@ class Client:
         Otherwise, it is hidden.
         """
         resp = requests.get(
-            f"{self.base_url}/mapper/get_points_by_block_no_embedding?block_number={block_number}",
+            f"{self.base_url}/mapper/get_points_by_block_no_embedding?block_number={block_number}&api_key={self.api_key}",
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -140,9 +140,27 @@ class Client:
         Otherwise, they are hidden.
         """
         resp = requests.get(
-            f"{self.base_url}/mapper/get_points_by_block_range_no_embedding?start_block={start_block}&end_block={end_block}",
+            f"{self.base_url}/mapper/get_points_by_block_range_no_embedding?start_block={start_block}&end_block={end_block}&api_key={self.api_key}",
         )
         if resp.status_code == 200:
             data = resp.json()
             return data.get("points")
+        return None
+
+    def get_reasoning_match_chunk_end(
+        self, ticker: str, summary_type: str, user_chunk_end: int
+    ) -> Optional[str]:
+        """
+        Return the reasoning for the last available chunk whose chunk_end is
+        less and equal to user_chunk_end, for the given ticker and summary_type.
+        If a valid query-param api_key is provided, reasoning is included.
+        Otherwise, it is hidden.
+        Please note, api_key is not required for summary_type ending with _public.
+        """
+        resp = requests.get(
+            f"{self.base_url}/agent/get_reasoning_match_chunk_end?ticker={ticker}&summary_type={summary_type}&user_chunk_end={user_chunk_end}&api_key={self.api_key}",
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("reasoning")
         return None
