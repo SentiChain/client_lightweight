@@ -4,7 +4,7 @@ A lightweight Python client to interact with the SentiChain [REST API](https://a
 
 This library provides convenience methods for:
 
-- [API Balance](https://sentichain.com/app?tab=APIBalance): Retrieve user information (e.g., remaining points).
+- [API Management](https://sentichain.com/app?tab=APIManagement): Retrieve user information (e.g., remaining points).
 - [Block Explorer](https://sentichain.com/app?tab=BlockExplorer): Get chain length, last block time, total transactions, etc.
 - [Event Map](https://sentichain.com/app?tab=EventMap): Retrieve event map data for specified block ranges.
 - [Observation](https://sentichain.com/app?tab=Observation): Retrieve reasoning for specified ticker, summary type and block chunk end.
@@ -21,7 +21,7 @@ This library provides convenience methods for:
 
 ## Features
 
-- API Balance
+- API Management
   - Fetch detailed user information, including points usage.
 - Block Explorer
   - Get chain length and last block time.
