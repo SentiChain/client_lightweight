@@ -102,6 +102,35 @@ class Client:
             return data.get("block")
         return None
 
+    def get_block_number_from_timestamp(
+        self, network: str, timestamp: str
+    ) -> Optional[int]:
+        """
+        Retrieve the last availble block number less or equal to a UTC timestamp
+        for a specified network.
+        """
+        resp = requests.get(
+            f"{self.base_url}/blockchain/get_block_number_from_timestamp?network={network}&timestamp={timestamp}",
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("block_number")
+        return None
+
+    def get_timestamp_from_block_number(
+        self, network: str, block_number: int
+    ) -> Optional[str]:
+        """
+        Retrieve the UTC timestamp for a block number for a specified network.
+        """
+        resp = requests.get(
+            f"{self.base_url}/blockchain/get_timestamp_from_block_number?network={network}&block_number={block_number}",
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("timestamp")
+        return None
+
     def get_max_block_number(self) -> Optional[int]:
         """
         Returns the maximum block number of the Miannet blocks processed in the
