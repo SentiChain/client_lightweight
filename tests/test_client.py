@@ -1,11 +1,9 @@
-# Copyright (c) 2018-2025 Yototec Ltd
-
 """
 Tests Client.
 """
 
 import unittest
-from client.client import Client
+from sentichain.client import Client
 
 
 class TestClient(unittest.TestCase):

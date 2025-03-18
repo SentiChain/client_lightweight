@@ -53,7 +53,7 @@ Since this is a standalone Python file, you can simply:
 ### Initializing the Client
 
 ```python
-from client import Client
+from sentichain.client import Client
 
 # If you have an API key:
 api_key = "YOUR_SENTICHAIN_API_KEY"
@@ -70,7 +70,7 @@ client = Client(api_key=api_key)
 This is an example of how you might use this client:
 
 ```python
-from client import Client
+from sentichain.client import Client
 
 def main():
     api_key = "YOUR_API_KEY"  # Replace with your real key
