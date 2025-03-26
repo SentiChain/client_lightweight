@@ -14,12 +14,13 @@ class Client:
     A Python client that wraps interactions with the SentiChain API.
     """
 
-    def __init__(self, base_url: str = BASE_URL, api_key: str = ""):
+    def __init__(self, base_url: str = BASE_URL, api_key: str = "", timeout: int = 30):
         """
         Initialize the client with a base URL and an optional API key.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        self.timeout = timeout
 
     def get_user_info(self, user_id: str, api_key: str) -> Optional[Dict[str, Any]]:
         """
@@ -27,6 +28,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/api/get_user_info?user_id={user_id}&api_key={api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -39,6 +41,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_chain_length?network={network}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -51,6 +54,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_last_block_time?network={network}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -64,6 +68,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_total_number_of_transactions?network={network}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -78,6 +83,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_last_block?network={network}&api_key={self.api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -94,6 +100,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_block_by_number?network={network}&block_number={block_number}&api_key={self.api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -109,6 +116,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_block_number_from_timestamp?network={network}&timestamp={timestamp}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -123,6 +131,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/blockchain/get_timestamp_from_block_number?network={network}&block_number={block_number}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -136,6 +145,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/mapper/get_max_block_number",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -152,6 +162,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/mapper/get_points_by_block_no_embedding?block_number={block_number}&api_key={self.api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -168,6 +179,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/mapper/get_points_by_block_range_no_embedding?start_block={start_block}&end_block={end_block}&api_key={self.api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -186,6 +198,7 @@ class Client:
         """
         resp = requests.get(
             f"{self.base_url}/agent/get_reasoning_match_chunk_end?ticker={ticker}&summary_type={summary_type}&user_chunk_end={user_chunk_end}&api_key={self.api_key}",
+            timeout=self.timeout,
         )
         if resp.status_code == 200:
             data = resp.json()

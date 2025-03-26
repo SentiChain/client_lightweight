@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentichain"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python client for interacting with the SentiChain API"
 readme = "README.md"
 license = { file = "LICENSE" }
