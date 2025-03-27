@@ -36,17 +36,14 @@ This library provides convenience methods for:
 ## Requirements
 
 - Python 3.8+ (recommend)
-- [requests](https://pypi.org/project/requests/) library
 
 ## Installation
 
-Since this is a standalone Python file, you can simply:
-1. Clone or download this repository.
-2. Ensure you have `requests` installed:
-   ```bash
-   pip install requests
-   ```
-3. Place `client.py` in your project, or install it as a local module.
+To install this Python package, you can simply:
+
+```bash
+pip install sentichain
+```
 
 ## Usage
 
@@ -56,13 +53,10 @@ Since this is a standalone Python file, you can simply:
 from sentichain.client import Client
 
 # If you have an API key:
-api_key = "YOUR_SENTICHAIN_API_KEY"
+api_key = "YOUR_API_KEY"
 
 # Initialize the client with the default SentiChain API URL
 client = Client(api_key=api_key)
-
-# Or override the base URL if needed:
-# client = Client(base_url="https://some-other-domain.com", api_key=api_key)
 ```
 
 ### Examples
