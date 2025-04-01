@@ -8,7 +8,6 @@ import unittest
 from sentichain.transaction import (  # type: ignore
     Transaction,  # type: ignore
     verify_signature,  # type: ignore
-    verify_ai_summary_fields,  # type: ignore
     generate_transaction_hash,  # type: ignore
 )
 from sentichain.keys import generate_key_pair  # type: ignore
@@ -19,13 +18,12 @@ class TestTransaction(unittest.TestCase):
     Tests Transaction and associated cryptographic utils.
     """
 
-    def test_create_and_verify_ai_transaction(self) -> None:
+    def test_create_and_verify_transaction(self) -> None:
         """
         1) Generate a key pair
-        2) Create a new AI summary transaction (with required fields)
+        2) Create a new transaction
         3) Sign the transaction
         4) Check signature verification
-        5) Check AI summary fields (prompt_hash, post_summary, response_hash)
         """
         # 1) Generate RSA key pair
         private_key, public_key = generate_key_pair()
@@ -33,19 +31,21 @@ class TestTransaction(unittest.TestCase):
         # 2) Create transaction
         post_timestamp = 1672531200.0  # e.g., 2023-01-01 00:00:00 UTC
         post_link = "https://sentichain.com/someuser/status/12345"
-        prompt_hash = (
-            "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"  # 64 hex
-        )
-        post_summary = "Post about an upcoming product launch."
         sender = "Alice"
 
-        tx_obj = Transaction.create_ai_summary_transaction(
+        # Create a mock sentiment analysis matrix and signature
+        post_matrix = [[0.5, 0.3, 0.2], [0.1, 0.7, 0.2]]
+        matrix_signature = "mock_signature"
+        source = "sentichain"
+
+        tx_obj = Transaction(
             sender=sender,
             public_key=public_key,
             post_timestamp=post_timestamp,
             post_link=post_link,
-            prompt_hash=prompt_hash,
-            post_summary=post_summary,
+            post_matrix=post_matrix,
+            matrix_signature=matrix_signature,
+            source=source,
             nonce=42,
         )
 
@@ -58,50 +58,41 @@ class TestTransaction(unittest.TestCase):
             verify_signature(serialized_tx), "RSA signature should be valid"
         )
 
-        # 5) Verify AI summary fields
-        self.assertTrue(
-            verify_ai_summary_fields(serialized_tx),
-            "AI summary fields should be valid (response_hash matches post_summary).",
-        )
-
-    def test_tampered_post_summary(self) -> None:
+    def test_tampered_data(self) -> None:
         """
-        Verify that if the post_summary is tampered after signing,
-        signature verification might still pass (since we didn't change signature field),
-        but AI summary fields check will fail (response_hash mismatch).
+        Verify that if the transaction data is tampered after signing,
+        signature verification will fail.
         """
         private_key, public_key = generate_key_pair()
 
-        tx_obj = Transaction.create_ai_summary_transaction(
+        # Create a mock sentiment analysis matrix and signature
+        post_matrix = [[0.4, 0.4, 0.2], [0.2, 0.6, 0.2]]
+        matrix_signature = "mock_signature"
+        source = "sentichain"
+
+        tx_obj = Transaction(
             sender="Bob",
             public_key=public_key,
             post_timestamp=1000.0,
             post_link="https://sentichain.com/post/999",
-            prompt_hash="abcdef" + "0" * 58,  # 64 hex total
-            post_summary="Original summary",
+            post_matrix=post_matrix,
+            matrix_signature=matrix_signature,
+            source=source,
             nonce=1,
         )
+
         signature = tx_obj.sign_transaction(private_key)
         serialized = tx_obj.serialize(signature)
 
-        # Tamper the "post_summary" field in the JSON
+        # Tamper with the data in the JSON
         tx_dict = json.loads(serialized)
-        tx_dict["post_summary"] = "Tampered summary"
+        tx_dict["post_link"] = "https://sentichain.com/tampered/post"
         tampered_tx_json = json.dumps(tx_dict, sort_keys=True)
 
-        # The RSA signature check might still pass or fail depending on how we tamper
+        # The RSA signature check should fail because we changed the data but not the signature
         signature_ok = verify_signature(tampered_tx_json)
-        # We'll check that in this example, the signature will FAIL because the tampered
-        # data doesn't match the originally signed data.
         self.assertFalse(
-            signature_ok, "Signature should fail if we changed post_summary."
-        )
-
-        # But even if the signature somehow passed, the AI fields check would fail:
-        # We'll check that as well:
-        self.assertFalse(
-            verify_ai_summary_fields(tampered_tx_json),
-            "AI summary fields must fail (response_hash mismatch) on tampered summary.",
+            signature_ok, "Signature should fail if we changed transaction data."
         )
 
     def test_tampered_signature(self) -> None:
@@ -110,14 +101,22 @@ class TestTransaction(unittest.TestCase):
         """
         private_key, public_key = generate_key_pair()
 
-        tx_obj = Transaction.create_ai_summary_transaction(
+        # Create a mock sentiment analysis matrix and signature
+        post_matrix = [[0.3, 0.5, 0.2], [0.3, 0.5, 0.2]]
+        matrix_signature = "mock_signature"
+        source = "sentichain"
+
+        tx_obj = Transaction(
             sender="Eve",
             public_key=public_key,
             post_timestamp=1000.0,
             post_link="https://sentichain.com/post/abc",
-            prompt_hash="a" * 64,
-            post_summary="Something about a new product",
+            post_matrix=post_matrix,
+            matrix_signature=matrix_signature,
+            source=source,
+            nonce=1,
         )
+
         signature = tx_obj.sign_transaction(private_key)
         serialized = tx_obj.serialize(signature)
 
@@ -142,9 +141,9 @@ class TestTransaction(unittest.TestCase):
                 "public_key": "FAKE-PEM-KEY",
                 "post_timestamp": "2025-03-25T09:36:26Z",
                 "post_link": "https://sentichain.com/some/status/999",
-                "prompt_hash": "0" * 64,
-                "post_summary": "Just a summary",
-                "response_hash": "abcd" * 16,  # 64 hex
+                "post_matrix": [[0.1, 0.2, 0.7], [0.6, 0.2, 0.2]],
+                "matrix_signature": "mock_signature",
+                "source": "sentichain",
                 "transaction_timestamp": "2025-03-25T09:36:26Z",
                 "nonce": 2,
                 "signature": "ff" * 128,  # Some hex signature
