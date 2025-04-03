@@ -9,7 +9,7 @@ represents a sentiment analysis result for a social media post, including:
 - Cryptographic verification of the transaction
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 import time
 import logging
 import json
