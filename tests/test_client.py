@@ -3,7 +3,7 @@ Tests Client.
 """
 
 import unittest
-from sentichain.client import Client
+from sentichain import Client
 
 
 class TestClient(unittest.TestCase):

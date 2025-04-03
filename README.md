@@ -50,7 +50,7 @@ pip install sentichain
 ### Initializing the Client
 
 ```python
-from sentichain.client import Client
+from sentichain import Client
 
 # If you have an API key:
 api_key = "YOUR_API_KEY"
@@ -64,7 +64,7 @@ client = Client(api_key=api_key)
 This is an example of how you might use this client:
 
 ```python
-from sentichain.client import Client
+from sentichain import Client
 
 def main():
     api_key = "YOUR_API_KEY"  # Replace with your real key

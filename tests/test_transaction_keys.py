@@ -5,7 +5,7 @@ Tests Transaction and utils for managing keys.
 import json
 import unittest
 
-from sentichain.transaction import (  # type: ignore
+from sentichain import (  # type: ignore
     Transaction,  # type: ignore
     verify_signature,  # type: ignore
     generate_transaction_hash,  # type: ignore
