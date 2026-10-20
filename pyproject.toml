@@ -1,29 +1,65 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=84.2", "wheel>=0.48"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentichain"
-version = "0.2.2"
-description = "A Python client for interacting with the SentiChain"
+version = "0.3.0"
+description = "A Python client for SentiChain blockchain and sentiment data"
 readme = "README.md"
-license = { file = "LICENSE" }
-authors = [
-  { name="Edward Chen", email="rchen@yototec.com" }
-]
-keywords = ["sentichain", "api", "client"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Edward Chen", email = "rchen@yototec.com" }]
+keywords = ["sentichain", "blockchain", "sentiment", "api"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
+    "Typing :: Typed",
 ]
-dependencies = [
-    "requests==2.32.3",
-    "cryptography==42.0.5"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.34.2,<3", "cryptography>=50.0.2,<51"]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.6,<2",
+    "pip-audit>=2.10,<3",
+    "pytest>=9.1,<10",
+    "pytest-cov>=7.1,<8",
+    "ruff>=0.17,<0.18",
+    "twine>=7,<8",
 ]
-requires-python = ">=3.7"
 
 [project.urls]
-"Homepage" = "https://github.com/SentiChain/client_lightweight"
-"Source Code" = "https://github.com/SentiChain/client_lightweight"
-"Tracker" = "https://github.com/SentiChain/client_lightweight/issues"
+Homepage = "https://sentichain.com"
+Documentation = "https://github.com/SentiChain/client_lightweight#readme"
+Source = "https://github.com/SentiChain/client_lightweight"
+Issues = "https://github.com/SentiChain/client_lightweight/issues"
+
+[tool.setuptools.packages.find]
+include = ["sentichain*"]
+
+[tool.setuptools.package-data]
+sentichain = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = ["live: read-only checks against configured public APIs"]
+
+[tool.coverage.run]
+branch = true
+source = ["sentichain"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
