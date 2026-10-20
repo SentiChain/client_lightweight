@@ -1,47 +1,72 @@
-"""
-Transaction module for SentiChain blockchain.
+"""Create, sign, hash, and verify SentiChain transactions."""
 
-This module defines the Transaction class and related utilities for handling
-sentiment analysis transactions in the SentiChain blockchain. Each transaction
-represents a sentiment analysis result for a social media post, including:
-- The original post's metadata (timestamp, link)
-- The sentiment analysis matrix and its signature
-- Cryptographic verification of the transaction
-"""
-
-from typing import Dict, List, Any
-import time
-import logging
-import json
 import hashlib
+import json
+import math
+import time
+from typing import Any
 
-from cryptography.hazmat.primitives import hashes  # type: ignore
-from cryptography.hazmat.primitives.asymmetric import padding, rsa  # type: ignore
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    PublicFormat,
-    load_pem_public_key,
-)  # type: ignore
-from cryptography.exceptions import InvalidSignature  # type: ignore
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+from .keys import public_key_from_str, public_key_to_str
 
 
-logger = logging.getLogger(__name__)
+def _finite_number(value: Any) -> bool:
+    return (isinstance(value, int) and not isinstance(value, bool)) or (
+        isinstance(value, float) and math.isfinite(value)
+    )
+
+
+def _validate_fields(transaction: dict[str, Any]) -> None:
+    for field in ("sender", "post_link", "matrix_signature"):
+        if not isinstance(transaction.get(field), str) or not transaction[field]:
+            raise ValueError(f"{field} must be a nonempty string.")
+    if not isinstance(transaction.get("source"), str):
+        raise ValueError("source must be a string containing the source text.")
+    for field in ("post_timestamp", "transaction_timestamp"):
+        if not _finite_number(transaction.get(field)):
+            raise ValueError(f"{field} must be a finite number.")
+    nonce = transaction.get("nonce")
+    if not isinstance(nonce, int) or isinstance(nonce, bool):
+        raise ValueError("nonce must be an integer.")
+    matrix = transaction.get("post_matrix")
+    if not isinstance(matrix, list) or not matrix:
+        raise ValueError("post_matrix must be a nonempty list of numeric rows.")
+    width = None
+    for row in matrix:
+        if not isinstance(row, list) or not row:
+            raise ValueError("post_matrix rows must be nonempty lists.")
+        if width is None:
+            width = len(row)
+        if len(row) != width or not all(_finite_number(value) for value in row):
+            raise ValueError("post_matrix must be rectangular and contain finite numbers.")
+
+
+def _json_object(transaction_json: str) -> dict[str, Any]:
+    if not isinstance(transaction_json, str):
+        raise ValueError("Transaction JSON must be a string.")
+    try:
+        transaction = json.loads(transaction_json)
+        if not isinstance(transaction, dict):
+            raise ValueError("Transaction JSON must contain an object.")
+        json.dumps(transaction, sort_keys=True, allow_nan=False)
+    except (ValueError, TypeError, OverflowError, RecursionError) as exc:
+        raise ValueError("Transaction JSON must contain an object with finite values.") from exc
+    return transaction
+
+
+def _canonical_bytes(transaction: dict[str, Any]) -> bytes:
+    return json.dumps(transaction, sort_keys=True, allow_nan=False).encode("utf-8")
 
 
 class Transaction:
-    """
-    Represents a sentiment analysis transaction in the SentiChain blockchain.
+    """A signed post and its embedding matrix.
 
-    Each transaction contains:
-    - sender:           The identifier (address) of the entity submitting the sentiment analysis
-    - public_key:       RSA public key (PEM-encoded) used to verify the transaction signature
-    - post_timestamp:   Unix timestamp of when the original post was created
-    - post_link:        URL or link to the original social media post
-    - post_matrix:      The sentiment analysis matrix generated for the post
-    - matrix_signature: Digital signature of the matrix from SentiChain Vectorizer
-    - source:           Source platform of the post (optional, for internal use only)
-    - nonce:            Unique number to prevent transaction replay attacks
-    - transaction_timestamp: Unix time when this transaction was created
+    ``source`` contains the original source text. ``nonce`` is a caller supplied
+    integer included in the signature; it does not by itself prevent replays.
+    Timestamps are Unix seconds. Matrix rows contain finite numeric embeddings.
     """
 
     def __init__(
@@ -50,41 +75,27 @@ class Transaction:
         public_key: rsa.RSAPublicKey,
         post_timestamp: float,
         post_link: str,
-        post_matrix: str,
+        post_matrix: list[list[float]],
         matrix_signature: str,
         source: str,
         nonce: int = 1,
     ) -> None:
-        """
-        Initializes a new Transaction instance.
-        """
-        self.sender: str = sender
-        self.public_key: rsa.RSAPublicKey = public_key
-        self.post_timestamp: float = post_timestamp
-        self.post_link: str = post_link
-        self.post_matrix: List[List[float]] = post_matrix
-        self.matrix_signature: str = matrix_signature
-        self.source: str = source
+        self.sender = sender
+        self.public_key = public_key
+        self.post_timestamp = post_timestamp
+        self.post_link = post_link
+        self.post_matrix = post_matrix
+        self.matrix_signature = matrix_signature
+        self.source = source
+        self.transaction_timestamp = time.time()
+        self.nonce = nonce
+        self.to_dict()
 
-        # Internally assigned fields
-        self.transaction_timestamp: float = time.time()
-        self.nonce: int = nonce
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Converts the transaction fields into a dictionary for serialization.
-        This method prepares the transaction data for signing and storage,
-        excluding the signature which is added later in serialize().
-
-        Returns:
-            Dict[str, Any]: Dictionary containing all transaction fields in a format
-            suitable for JSON serialization.
-        """
-        return {
+    def to_dict(self) -> dict[str, Any]:
+        """Return validated transaction fields, excluding its signature."""
+        transaction = {
             "sender": self.sender,
-            "public_key": self.public_key.public_bytes(
-                Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
-            ).decode(),
+            "public_key": public_key_to_str(self.public_key),
             "post_timestamp": self.post_timestamp,
             "post_link": self.post_link,
             "post_matrix": self.post_matrix,
@@ -93,126 +104,70 @@ class Transaction:
             "nonce": self.nonce,
             "transaction_timestamp": self.transaction_timestamp,
         }
+        _validate_fields(transaction)
+        return transaction
 
     def sign_transaction(self, private_key: rsa.RSAPrivateKey) -> bytes:
-        """
-        Signs the transaction data using RSA-PSS with SHA-256.
-        The transaction data is first converted to a sorted JSON string to ensure
-        deterministic signing regardless of field order.
-
-        Args:
-            private_key (rsa.RSAPrivateKey): The private key corresponding to the
-            transaction's public key.
-
-        Returns:
-            bytes: The digital signature of the transaction data.
-        """
-        transaction_details = json.dumps(self.to_dict(), sort_keys=True).encode("utf-8")
-        signature = private_key.sign(
-            transaction_details,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
+        """Sign the sorted JSON fields with RSA-PSS and SHA-256."""
+        if not isinstance(private_key, rsa.RSAPrivateKey):
+            raise ValueError("private_key must be an RSA private key.")
+        if private_key.public_key().public_numbers() != self.public_key.public_numbers():
+            raise ValueError("The private key does not match the transaction public key.")
+        return private_key.sign(
+            _canonical_bytes(self.to_dict()),
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
             hashes.SHA256(),
         )
-        return signature
 
     def serialize(self, signature: bytes) -> str:
-        """
-        Serializes the complete transaction including its signature into a JSON string.
-        The signature is included as a hex-encoded string for easy storage and transmission.
-
-        Args:
-            signature (bytes): The digital signature from sign_transaction().
-
-        Returns:
-            str: JSON-formatted string containing all transaction fields and signature.
-        """
-        tx_data = self.to_dict()
-        tx_data["signature"] = signature.hex()
-        return json.dumps(tx_data, sort_keys=True)
+        """Return sorted JSON with the supplied signature encoded as hex."""
+        if not isinstance(signature, bytes) or not signature:
+            raise ValueError("signature must be nonempty bytes.")
+        transaction = self.to_dict()
+        transaction["signature"] = signature.hex()
+        return _canonical_bytes(transaction).decode("utf-8")
 
 
 def generate_transaction_hash(transaction_json: str) -> str:
-    """
-    Generates a SHA-256 hash of the transaction JSON string.
-    The transaction data is sorted by keys before hashing to ensure
-    deterministic hashing regardless of field order.
+    """Hash sorted transaction JSON using SHA-256.
 
-    Args:
-        transaction_json (str): The JSON string representation of the transaction.
-
-    Returns:
-        str: Hex-encoded SHA-256 hash of the sorted transaction data.
-
-    Raises:
-        ValueError: If the transaction_json is invalid JSON.
+    Raise ``ValueError`` for invalid JSON, nonobject roots, or nonfinite values.
+    This function hashes the supplied object without checking its signature.
     """
     try:
-        tx = json.loads(transaction_json)
-    except json.JSONDecodeError:
-        raise ValueError("Invalid JSON for transaction.")
-
-    sorted_tx = json.dumps(tx, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(sorted_tx).hexdigest()
+        return hashlib.sha256(_canonical_bytes(_json_object(transaction_json))).hexdigest()
+    except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError) as exc:
+        raise ValueError("Transaction JSON must contain an object with finite values.") from exc
 
 
 def verify_signature(transaction_json: str) -> bool:
-    """
-    Verifies the RSA-PSS signature of a transaction using SHA-256.
-    The transaction must contain both the public key (PEM format) and
-    the signature (hex-encoded) fields.
+    """Return whether a transaction has valid fields and an RSA-PSS signature.
 
-    Args:
-        transaction_json (str): The JSON string containing the transaction data,
-        public key, and signature.
-
-    Returns:
-        bool: True if the signature is valid and matches the transaction data;
-              False otherwise.
+    Malformed JSON, unsupported keys, invalid field types, and invalid signatures
+    return ``False``. No private key or source content is logged.
     """
     try:
-        transaction = json.loads(transaction_json)
-    except json.JSONDecodeError:
-        logger.error("Invalid transaction JSON.")
-        return False
-
-    sig_hex = transaction.pop("signature", None)
-    pub_key_pem_str = transaction.get("public_key")
-
-    if not sig_hex or not pub_key_pem_str:
-        logger.error("Transaction missing 'signature' or 'public_key'.")
-        return False
-
-    try:
-        signature = bytes.fromhex(sig_hex)
-    except ValueError:
-        logger.error("Signature field is not valid hex.")
-        return False
-
-    pub_key_pem = pub_key_pem_str.encode()
-    try:
-        public_key = load_pem_public_key(pub_key_pem)
-    except ValueError:
-        logger.error("Invalid public key format.")
-        return False
-
-    # Re-create the transaction data (without signature) in sorted order
-    tx_data = json.dumps(transaction, sort_keys=True).encode("utf-8")
-
-    # Verify
-    try:
-        public_key.verify(  # type: ignore
-            signature,  # type: ignore
-            tx_data,  # type: ignore
-            padding.PSS(  # type: ignore
-                mgf=padding.MGF1(hashes.SHA256()),  # type: ignore
-                salt_length=padding.PSS.MAX_LENGTH,  # type: ignore
-            ),  # type: ignore
-            hashes.SHA256(),  # type: ignore
+        transaction = _json_object(transaction_json)
+        signature_hex = transaction.pop("signature", None)
+        if not isinstance(signature_hex, str) or not signature_hex:
+            return False
+        signature = bytes.fromhex(signature_hex)
+        public_key = public_key_from_str(transaction.get("public_key"))
+        _validate_fields(transaction)
+        public_key.verify(
+            signature,
+            _canonical_bytes(transaction),
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256(),
         )
         return True
-    except InvalidSignature:
-        logger.warning("Signature verification failed.")
+    except (
+        InvalidSignature,
+        UnsupportedAlgorithm,
+        ValueError,
+        TypeError,
+        OverflowError,
+        RecursionError,
+        UnicodeError,
+    ):
         return False
