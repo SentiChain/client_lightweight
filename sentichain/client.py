@@ -243,7 +243,7 @@ class Client:
     ) -> Any:
         if self._closed:
             raise SentiChainError("Client is closed.")
-        headers = {}
+        headers = {"User-Agent": "SentiChain-Python-SDK/0.4"}
         operation_id = None
         if paid:
             if not self.api_key:
@@ -252,10 +252,10 @@ class Client:
             self.last_operation_id = operation_id
             self.credits_charged = None
             self.credits_remaining = None
-            headers = {
+            headers.update({
                 "Authorization": "Bearer " + self.api_key,
                 "Idempotency-Key": operation_id,
-            }
+            })
         for attempt in range(self.max_retries + 1):
             try:
                 response = self._session.get(

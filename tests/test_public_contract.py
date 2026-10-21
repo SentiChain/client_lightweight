@@ -95,7 +95,8 @@ def test_key_required_for_paid_reads_but_free_metadata_has_no_credentials(sessio
         session.get.assert_not_called()
         session.get.return_value = response({"chain_length": 8})
         assert client.get_chain_length("mainnet") == 8
-        assert session.get.call_args.kwargs["headers"] == {}
+        assert session.get.call_args.kwargs["headers"] == {
+            "User-Agent": "SentiChain-Python-SDK/0.4"}
 
 
 def test_credit_receipt_and_sanitized_insufficient_balance(session):
@@ -243,6 +244,7 @@ def test_real_local_http_retry_debits_once_and_metadata_is_free():
 
         def do_GET(self):
             state["requests"].append((self.path, dict(self.headers)))
+            assert self.headers.get("User-Agent") == "SentiChain-Python-SDK/0.4"
             path = urlsplit(self.path).path
             if path == "/blockchain/get_chain_length":
                 self.send_json(200, {"chain_length": 8})
