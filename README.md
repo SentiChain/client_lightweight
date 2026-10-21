@@ -116,9 +116,10 @@ with Client(api_key=os.environ["YOTOTEC_API_KEY"]) as client:
         for transaction in block["transactions"]:
             proof = transaction.get("matrix_signature")
             if proof is not None:
-                print("Matrix proof valid:", verify_matrix_signature(
-                    transaction["post_matrix"], proof, trusted_key
-                ))
+                print(
+                    "Matrix proof valid:",
+                    verify_matrix_signature(transaction["post_matrix"], proof, trusted_key),
+                )
 ```
 
 A valid proof authenticates the supplied matrix values against that trusted vectorizer key. It does not verify the omitted transaction fields, a canonical transaction signature/hash, the block hash, block inclusion, or original text. The public view is insufficient for `verify_signature()` or `generate_transaction_hash()` to verify the original signed transaction. Those helpers remain for locally held complete canonical transactions used in ingestion.
