@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentichain"
-version = "0.3.0"
-description = "A Python client for SentiChain blockchain and sentiment data"
+version = "0.4.0"
+description = "A Python client for SentiChain public matrices and Yototec Credits"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
