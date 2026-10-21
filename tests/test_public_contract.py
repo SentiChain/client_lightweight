@@ -96,7 +96,8 @@ def test_key_required_for_paid_reads_but_free_metadata_has_no_credentials(sessio
         session.get.return_value = response({"chain_length": 8})
         assert client.get_chain_length("mainnet") == 8
         assert session.get.call_args.kwargs["headers"] == {
-            "User-Agent": "SentiChain-Python-SDK/0.4"}
+            "User-Agent": "SentiChain-Python-SDK/0.4"
+        }
 
 
 def test_credit_receipt_and_sanitized_insufficient_balance(session):

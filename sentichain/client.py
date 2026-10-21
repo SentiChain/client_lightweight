@@ -252,10 +252,12 @@ class Client:
             self.last_operation_id = operation_id
             self.credits_charged = None
             self.credits_remaining = None
-            headers.update({
-                "Authorization": "Bearer " + self.api_key,
-                "Idempotency-Key": operation_id,
-            })
+            headers.update(
+                {
+                    "Authorization": "Bearer " + self.api_key,
+                    "Idempotency-Key": operation_id,
+                }
+            )
         for attempt in range(self.max_retries + 1):
             try:
                 response = self._session.get(
