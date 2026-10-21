@@ -10,28 +10,24 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 
-from sentichain.client import ANALYTICS_BASE_URL, BASE_URL, Client
+from sentichain.client import BASE_URL, Client
 from sentichain.exceptions import (
     APIError,
     AuthenticationError,
+    InsufficientCreditsError,
     RateLimitError,
     ResponseError,
     SentiChainError,
     TransportError,
 )
 
-USER = {"user_id": "alice", "name": "Alice", "email": "alice@example.org", "points": 20}
 BLOCK = {
     "block_number": 7,
     "block_timestamp": 1792455038.5,
-    "previous_hash": "previous",
     "hash": "hash",
-    "validator": "validator",
-    "consensus_root": "root",
-    "transactions": {"transaction": {"post_matrix": [[0.1], [0.2]]}},
+    "transactions": [{"post_matrix": [[0.1], [0.2]]}],
 }
 CASES = [
-    ("get_user_info", ("alice",), "user", USER),
     ("get_chain_length", ("mainnet",), "chain_length", 8),
     ("get_last_block_time", ("testnet",), "last_block_time", 1792455038.5),
     ("get_total_number_of_transactions", ("mainnet",), "total_tx_count", 20),
@@ -45,14 +41,7 @@ CASES = [
     ),
     ("get_timestamp_from_block_number", ("mainnet", 0), "timestamp", "2026-10-20T00:10:39Z"),
     ("get_max_block_number", (), "max_block_number", 7),
-    ("get_points_by_block_no_embedding", (0,), "points", [[0, "event", "content"]]),
-    ("get_points_by_block_range_no_embedding", (0, 1), "points", [{"block_number": 0}]),
-    (
-        "get_reasoning_match_chunk_end",
-        ("BTC", "observation_public", 0),
-        "reasoning",
-        "Market analysis",
-    ),
+    ("get_vectorizer_public_key", (), "public_key", "trusted-public-pem"),
 ]
 
 
@@ -110,38 +99,33 @@ def test_complete_matrices_requested_by_default(client, session):
         session.get.return_value = response({"block": BLOCK})
         assert getattr(client, method)(*args)["transactions"] == BLOCK["transactions"]
         assert session.get.call_args.kwargs["params"]["full_embedding"] == "true"
-        getattr(client, method)(*args, full_embedding=False)
-        assert "full_embedding" not in session.get.call_args.kwargs["params"]
+        with pytest.raises(ValueError, match="retain full matrices"):
+            getattr(client, method)(*args, full_embedding=False)
 
 
-def test_user_key_reuse_and_override(client, session):
-    session.get.return_value = response({"user": USER})
-    for override, expected in [
-        ({}, "private-key"),
-        ({"api_key": "another-key"}, "another-key"),
-        ({"api_key": ""}, ""),
-    ]:
-        client.get_user_info("alice", **override)
-        assert session.get.call_args.kwargs["params"]["api_key"] == expected
-
-
-def test_reserved_and_unicode_values_encoded(monkeypatch):
+def test_reserved_values_encoded_and_credentials_stay_out_of_url(monkeypatch):
     prepared = []
 
     def send(session, request, **kwargs):
         prepared.append((request, kwargs))
-        field = "block_number" if "timestamp" in request.url else "user"
-        return response({field: 7 if field == "block_number" else USER})
+        return response(
+            {"block": BLOCK} if "/get_last_block?" in request.url else {"block_number": 7}
+        )
 
     monkeypatch.setattr(requests.Session, "send", send)
-    key = "secret&+?雪"
+    key = "ytk_test_secret&+?"
     with Client(api_key=key) as client:
-        client.get_user_info("a&b +雪")
+        client.get_last_block("mainnet")
         client.get_block_number_from_timestamp("mainnet", "2026-10-20T05:40:39+05:30")
     assert parse_qs(urlsplit(prepared[0][0].url).query) == {
-        "user_id": ["a&b +雪"],
-        "api_key": [key],
+        "network": ["mainnet"],
+        "full_embedding": ["true"],
     }
+    assert key not in prepared[0][0].url
+    assert prepared[0][0].headers["Authorization"] == "Bearer " + key
+    assert "Idempotency-Key" in prepared[0][0].headers
+    assert "Authorization" not in prepared[1][0].headers
+    assert "Idempotency-Key" not in prepared[1][0].headers
     assert parse_qs(urlsplit(prepared[1][0].url).query)["timestamp"] == [
         "2026-10-20T05:40:39+05:30"
     ]
@@ -149,27 +133,12 @@ def test_reserved_and_unicode_values_encoded(monkeypatch):
     assert all(kwargs["allow_redirects"] is False for _, kwargs in prepared)
 
 
-def test_analysis_destination_and_credential_isolation(client, session):
-    session.get.return_value = response({"reasoning": "hidden"})
-    assert client.get_reasoning_match_chunk_end("BTC&ETH", "observation_public", 0) == "hidden"
-    assert (
-        session.get.call_args.args[0] == ANALYTICS_BASE_URL + "/agent/get_reasoning_match_chunk_end"
-    )
-    assert "api_key" not in session.get.call_args.kwargs["params"]
-    assert "headers" not in session.get.call_args.kwargs
-
-
-def test_configurable_destinations_and_timeout(session):
-    session.get.return_value = response({"reasoning": None})
-    with Client(
-        "http://localhost:8000/service/",
-        timeout=(1, 3),
-        analytics_base_url="https://analysis.example/base/",
-    ) as client:
-        client.get_reasoning_match_chunk_end("BTC", "observation_public", 1)
-        assert (
-            session.get.call_args.args[0]
-            == "https://analysis.example/base/agent/get_reasoning_match_chunk_end"
+def test_configurable_destination_and_timeout(session):
+    session.get.return_value = response({"max_block_number": None})
+    with Client("http://localhost:8000/service/", timeout=(1, 3)) as client:
+        client.get_max_block_number()
+        assert session.get.call_args.args[0] == (
+            "http://localhost:8000/service/mapper/get_max_block_number"
         )
         assert session.get.call_args.kwargs["timeout"] == (1, 3)
         assert client.base_url == "http://localhost:8000/service"
@@ -180,6 +149,7 @@ def test_configurable_destinations_and_timeout(session):
     [
         (400, APIError),
         (401, AuthenticationError),
+        (402, InsufficientCreditsError),
         (403, AuthenticationError),
         (404, APIError),
         (429, RateLimitError),
@@ -213,7 +183,7 @@ def test_http_errors_explicit_and_private(client, session, status, exception):
 def test_network_errors_sanitized(client, session, error):
     session.get.side_effect = error("https://api.example/?api_key=private-key")
     with pytest.raises(TransportError) as caught:
-        client.get_user_info("alice")
+        client.get_last_block("mainnet")
     rendered = "".join(traceback.format_exception(caught.type, caught.value, caught.tb))
     assert "private-key" not in str(caught.value)
     assert "api.example" not in rendered
@@ -338,7 +308,9 @@ def test_context_closes_and_disallows_reuse(session):
         {"base_url": "https://example.org:0"},
         {"base_url": "https://"},
         {"base_url": "https://example.org\\bad"},
-        {"analytics_base_url": "https://example.org?"},
+        {"base_url": "https://example.org?"},
+        {"api_key": "ytk_unsafe\nheader"},
+        {"api_key": "ytk_雪"},
         {"base_url": " https://example.org"},
         {"api_key": None},
         {"timeout": 0},
@@ -371,19 +343,11 @@ def test_constructor_validation_before_session(session, kwargs):
         ("get_block_by_number", ("mainnet", -1), {}),
         ("get_block_by_number", ("mainnet", True), {}),
         ("get_timestamp_from_block_number", ("mainnet", 1.0), {}),
-        ("get_points_by_block_no_embedding", (False,), {}),
-        ("get_points_by_block_range_no_embedding", (2, 1), {}),
-        ("get_points_by_block_range_no_embedding", (0, True), {}),
         ("get_last_block", ("mainnet",), {"full_embedding": "false"}),
         ("get_block_by_number", ("mainnet", 0), {"full_embedding": 1}),
         ("get_block_number_from_timestamp", ("mainnet", "2026-10-20T00:10:39"), {}),
         ("get_block_number_from_timestamp", ("mainnet", "not a timestamp"), {}),
         ("get_block_number_from_timestamp", ("mainnet", 1792455039), {}),
-        ("get_user_info", (" ",), {}),
-        ("get_user_info", ("alice",), {"api_key": 12}),
-        ("get_reasoning_match_chunk_end", ("", "observation_public", 0), {}),
-        ("get_reasoning_match_chunk_end", ("BTC", " ", 0), {}),
-        ("get_reasoning_match_chunk_end", ("BTC", "observation_public", True), {}),
     ],
 )
 def test_method_input_validation(client, session, method, args, kwargs):
@@ -395,10 +359,8 @@ def test_method_input_validation(client, session, method, args, kwargs):
 def test_zero_and_empty_success_results(client, session):
     session.get.return_value = response({"chain_length": 0})
     assert client.get_chain_length("mainnet") == 0
-    session.get.return_value = response({"points": []})
-    assert client.get_points_by_block_no_embedding(0) == []
-    session.get.return_value = response({"reasoning": ""})
-    assert client.get_reasoning_match_chunk_end("BTC", "observation_public", 0) == ""
+    session.get.return_value = response({"block": {**BLOCK, "transactions": []}})
+    assert client.get_last_block("mainnet")["transactions"] == []
 
 
 def test_default_service_url(client, session):

@@ -1,159 +1,156 @@
 # SentiChain Python Client
 
-Read SentiChain blocks, transactions, network statistics, event maps, and account information from Python. The package also provides local RSA key and transaction signing helpers, plus access to public SentiMove analytics.
+Read full SentiChain token matrices, block time, and free network metadata from Python. Local RSA key and canonical transaction signing helpers remain available for ingestion.
 
 [API documentation](https://sentichain.com/docs) | [Package](https://pypi.org/project/sentichain/) | [Support](mailto:info@sentichain.com)
 
-## Installation
-
-Use a supported Python installation. Python and dependency requirements are declared in the package metadata.
+## Installation and credentials
 
 ```bash
 python -m pip install sentichain
 ```
 
-## Read the latest block
+Connect your Ethereum-compatible wallet at [Yototec Credits](https://credits.yototec.com) to initialize its permanent API key and one-time 1,000-credit grant. Reconnecting reuses the same key and balance. Additional credits are arranged through [info@yototec.com](mailto:info@yototec.com). Store your key in `YOTOTEC_API_KEY`; the SDK sends it only in `Authorization: Bearer`, never a URL. The former SentiChain keys and account-points system are retired.
 
-Public network statistics do not require an API key. Block transaction details and mapper content depend on your API access and available account points. Store your SentiChain API key in the `SENTICHAIN_API_KEY` environment variable before running this example.
+## Purchase a block
 
-```python
-import os
-
-from sentichain import Client
-
-with Client(api_key=os.environ["SENTICHAIN_API_KEY"]) as client:
-    print("Block count:", client.get_chain_length(network="mainnet"))
-    block = client.get_last_block(network="mainnet")
-    if block is not None:
-        print("Latest block:", block["block_number"])
-        for transaction_hash, transaction in block["transactions"].items():
-            print("Transaction:", transaction_hash)
-            print("Source:", transaction["source"])
-            print("Matrix rows:", len(transaction["post_matrix"]))
-```
-
-Responses are ordinary Python values, not block or transaction objects. A block is a dictionary; its `transactions` field maps transaction hashes to transaction dictionaries. Each transaction's `post_matrix` is a nested numeric list, not a `vector` attribute. Transaction details may be hidden when access is unavailable. Requesting a block does not guarantee that it contains transactions.
-
-Block methods accept the keyword-only `full_embedding` option, which defaults to `True`. Pass `full_embedding=False` to request reduced embedding detail. The API determines the returned representation and applies the same access checks.
-
-```python
-from sentichain import Client
-
-with Client() as client:
-    block = client.get_last_block(network="mainnet", full_embedding=False)
-    if block is not None:
-        print("Latest block:", block["block_number"])
-```
-
-## Configure requests
-
-`Client` uses `https://api.sentichain.com` for blockchain, mapper, and account reads. Public analytics use the separate `https://api.sentimove.com` service. Set `base_url` and `analytics_base_url` independently when connecting to other deployments. The SentiChain API key is never attached to analytics requests, and HTTP redirects are not followed.
+A block purchase costs one credit, including complete matrices for every transaction in that block. Metadata and unsuccessful requests are free. Insufficient credit rejects the whole purchase without data or a debit. These rules also apply to administrators.
 
 ```python
 import os
 
 from sentichain import Client
 
-with Client(
-    api_key=os.environ["SENTICHAIN_API_KEY"],
-    timeout=(5, 30),
-    max_retries=2,
-    backoff_factor=0.5,
-    max_backoff=5,
-) as client:
-    user = client.get_user_info(user_id=os.environ["SENTICHAIN_USER_ID"])
-    if user is not None:
-        print("Account information retrieved")
+with Client(api_key=os.environ["YOTOTEC_API_KEY"]) as client:
+    print("Block count:", client.get_chain_length("mainnet"))
+    block = client.get_last_block("mainnet")
+    if block is not None:
+        print("Block:", block["block_number"], "Time:", block["block_timestamp"])
+        for transaction in block["transactions"]:
+            matrix = transaction["post_matrix"]
+            print("Matrix dimensions:", len(matrix), len(matrix[0]))
+    print("Credits charged:", client.credits_charged)
+    print("Credits remaining:", client.credits_remaining)
 ```
 
-`timeout` is a positive finite number of seconds or a `(connect, read)` pair. It defaults to thirty seconds. `max_retries` accepts an integer from zero through five and defaults to two. It bounds retries of connection failures and temporary HTTP responses; set it to zero to disable retries. `backoff_factor` and `max_backoff` control the retry delay. If the service's `Retry-After` delay exceeds `max_backoff`, the client raises the corresponding HTTP error instead of retrying early. Invalid configuration raises `ValueError`.
+Responses are ordinary dictionaries. A public block has `block_number`, `block_timestamp` (Unix seconds), `hash` and an ordered `transactions` list. Each transaction contains the full rectangular numeric `post_matrix` and, when available, its `matrix_signature`. Empty transaction lists are valid. Block time is the observation time available to readers.
 
-Use `Client` as a context manager to close its HTTP session automatically. If you create a client directly, call `client.close()` when finished. `get_user_info(user_id)` uses the client's API key; pass `api_key=` to override it for that call.
+Original text, URLs, source identifiers, publication time, transaction time, sender and nonce are unavailable through public reads for every role. Canonical stored records and ingestion signatures are unchanged. The SDK rejects unexpected public block/transaction fields and malformed matrices rather than returning an old raw-source representation.
 
-## API reference
+Both block methods retain the keyword `full_embedding=True` for callers that specify it. `False` raises `ValueError`: reduced or pooled matrices do not satisfy the public reader contract.
 
-Successful methods return the named value from the API response. A legitimate JSON `null` is returned as `None`. Request failures raise an exception instead of being returned as `None`.
+## Retries and purchase identity
 
-| Method | Return value | Access and behavior |
-| --- | --- | --- |
-| `get_user_info(user_id, api_key=None)` | Account dictionary or `None` | Requires the user's API key; defaults to the client key. |
-| `get_chain_length(network)` | Integer block count or `None` | Public network statistic. The count is not a block identifier. |
-| `get_last_block_time(network)` | Numeric Unix timestamp or `None` | Time of the latest block. |
-| `get_total_number_of_transactions(network)` | Integer transaction count or `None` | Confirmed transactions on the selected network. |
-| `get_last_block(network, *, full_embedding=True)` | Block dictionary or `None` | Latest block; transaction details depend on access. |
-| `get_block_by_number(network, block_number, *, full_embedding=True)` | Block dictionary or `None` | Block with the requested identifier; transaction details depend on access. |
-| `get_block_number_from_timestamp(network, timestamp)` | Integer block identifier or `None` | Latest available block at or before the supplied time. |
-| `get_timestamp_from_block_number(network, block_number)` | Timestamp string or `None` | Timestamp for the requested block. |
-| `get_max_block_number()` | Integer block identifier or `None` | Latest mainnet block processed by the mapper. Mapper progress can trail the chain. |
-| `get_points_by_block_no_embedding(block_number)` | List of point rows or `None` | Mapper snapshots for one block; post content depends on access. |
-| `get_points_by_block_range_no_embedding(start_block, end_block)` | List of point rows or `None` | Mapper snapshots for an inclusive block range; post content depends on access. |
-| `get_reasoning_match_chunk_end(ticker, summary_type, user_chunk_end)` | Reasoning string or `None` | Public SentiMove analytics for the latest available chunk at or before the cutoff. |
+Each intentional block-method call creates a fresh UUID in `Idempotency-Key`. Automatic connection and temporary HTTP retries reuse it. The server freezes that operation's block identity, including for a latest-block request. A second intentional purchase gets a new UUID and costs one credit again. Reusing a UUID with different requested resources is a conflict.
 
-Use `mainnet` or `testnet` for `network`; block identifiers and range endpoints must be nonnegative integers. Pass a timezone-aware ISO timestamp string to `get_block_number_from_timestamp`, using `Z` or an explicit UTC offset. Query parameters are encoded, so offsets retain their meaning. Derive block identifiers from an actual block or mapper response rather than assuming the block count is the latest identifier.
+Supply `idempotency_key=` when resuming the same purchase after an uncertain transport result. Save the UUID before calling when a process restart must preserve purchase identity. `last_operation_id` records the most recent purchase UUID; transport and HTTP errors also expose `operation_id`. Never create a new purchase ID merely because an earlier commit may have succeeded.
+
+```python
+import os
+from uuid import uuid4
+
+from sentichain import Client, TransportError
+
+purchase_id = str(uuid4())
+with Client(api_key=os.environ["YOTOTEC_API_KEY"], timeout=(5, 30)) as client:
+    try:
+        block = client.get_block_by_number("mainnet", 130191, idempotency_key=purchase_id)
+    except TransportError:
+        # Persist purchase_id and resume the same operation after transport recovers.
+        raise
+```
+
+`credits_charged` and `credits_remaining` contain safe integer receipt headers from the last successful purchase, when supplied by the service. They reset before a new purchase; a failed request does not retain an old receipt. An idempotent response can repeat the original one-credit receipt without another debit. Account balances are viewed through Yototec Credits.
+
+## Configure requests and discover available blocks
+
+`Client` uses `https://api.sentichain.com`. Set `base_url` for another deployment. Redirects are disabled. `timeout` is a positive finite number of seconds or a `(connect, read)` pair, defaulting to thirty seconds. `max_retries` is an integer from zero through five, defaulting to two. `backoff_factor` and `max_backoff` bound retry delays. A server `Retry-After` above `max_backoff` raises the HTTP error without retrying early.
+
+Use a context manager or call `close()` to release connections. The client is intended for sequential use; use a separate client per concurrent worker so purchase receipt attributes remain unambiguous.
 
 ```python
 from datetime import datetime, timezone
 
 from sentichain import Client
 
-with Client() as client:
+with Client(timeout=15, max_retries=0) as client:
     timestamp = datetime.now(timezone.utc).isoformat()
-    block_number = client.get_block_number_from_timestamp(network="mainnet", timestamp=timestamp)
-    if block_number is not None:
-        print(client.get_timestamp_from_block_number("mainnet", block_number))
-
-    mapped_block = client.get_max_block_number()
-    if mapped_block is not None:
-        points = client.get_points_by_block_no_embedding(mapped_block)
-        print("Mapper snapshots:", len(points) if points is not None else 0)
+    number = client.get_block_number_from_timestamp("mainnet", timestamp)
+    if number is not None:
+        print(number, client.get_timestamp_from_block_number("mainnet", number))
 ```
 
-Mapper point rows contain coordinates, cluster information, and permitted post content. The SDK preserves each row as returned by the API, whether a dictionary or a list. Empty lists and hidden content are valid results. The methods named `no_embedding` do not return embedding matrices.
+Metadata requests contain no credentials or purchase IDs. Check metadata before a paid refresh. A chain length is a count, so derive a requested identifier from metadata rather than treating the count itself as a block identifier.
 
-## Public SentiMove analytics
+| Method | Return value | Price |
+| --- | --- | --- |
+| `get_chain_length(network)` | Block count or `None` | Free |
+| `get_last_block_time(network)` | Latest block Unix time or `None` | Free |
+| `get_total_number_of_transactions(network)` | Confirmed transaction count or `None` | Free |
+| `get_last_block(network, *, full_embedding=True, idempotency_key=None)` | Latest public block or `None` | One credit for a delivered block |
+| `get_block_by_number(network, block_number, *, full_embedding=True, idempotency_key=None)` | Requested public block or `None` | One credit for a delivered block |
+| `get_block_number_from_timestamp(network, timestamp)` | Block identifier at or before the timestamp, or `None` | Free |
+| `get_timestamp_from_block_number(network, block_number)` | ISO timestamp string or `None` | Free |
+| `get_max_block_number()` | Latest mapper block identifier or `None` | Free |
+| `get_vectorizer_public_key()` | Vectorizer public PEM or `None` | Free |
 
-Use `sm_events` for event analysis or `sm_signal` for signal analysis. Availability depends on the ticker, summary type, and completed analytics chunks. These methods read published analysis; the SDK does not generate trading decisions.
+Use `mainnet` or `testnet`, nonnegative integer block identifiers, and timezone-aware ISO timestamps (`Z` or an explicit offset). Query parameters preserve timezone offsets. A legitimate API JSON `null` returns `None`; errors raise exceptions.
+
+## Verify public matrix proofs
+
+`verify_matrix_signature(matrix, signature, trusted_public_key)` checks the hex proof using RSA-PSS/SHA-256 and the vectorizer's exact JSON matrix format. Pin the trusted vectorizer public key separately. Fetching a key alongside the matrix is useful for discovery but does not establish independent trust.
 
 ```python
-from sentichain import Client
+import os
+from pathlib import Path
 
-with Client(analytics_base_url="https://api.sentimove.com") as client:
-    block = client.get_last_block(network="mainnet", full_embedding=False)
+from sentichain import Client, verify_matrix_signature
+from sentichain.keys import public_key_from_str
+
+trusted_key = public_key_from_str(
+    Path(os.environ["TRUSTED_VECTORIZER_PUBLIC_KEY_PATH"]).read_text()
+)
+with Client(api_key=os.environ["YOTOTEC_API_KEY"]) as client:
+    block = client.get_block_by_number("mainnet", 130191)
     if block is not None:
-        reasoning = client.get_reasoning_match_chunk_end(
-            ticker="BTC",
-            summary_type="sm_events",
-            user_chunk_end=block["block_number"],
-        )
-        if reasoning is not None:
-            print(reasoning)
+        for transaction in block["transactions"]:
+            proof = transaction.get("matrix_signature")
+            if proof is not None:
+                print("Matrix proof valid:", verify_matrix_signature(
+                    transaction["post_matrix"], proof, trusted_key
+                ))
 ```
 
-## Handle errors
+A valid proof authenticates the supplied matrix values against that trusted vectorizer key. It does not verify the omitted transaction fields, a canonical transaction signature/hash, the block hash, block inclusion, or original text. The public view is insufficient for `verify_signature()` or `generate_transaction_hash()` to verify the original signed transaction. Those helpers remain for locally held complete canonical transactions used in ingestion.
 
-All request errors derive from `SentiChainError` and can be imported from `sentichain`.
+## Handle errors and migrate callers
+
+All errors derive from `SentiChainError` and are importable from `sentichain`.
 
 | Exception | Meaning |
 | --- | --- |
-| `APIError` | An unsuccessful HTTP response, including redirects. Its `status_code` identifies the response. |
-| `AuthenticationError` | An authentication or permission response. Subclass of `APIError`. |
-| `RateLimitError` | A rate limit response that cannot be retried within the configured policy. Subclass of `APIError`; `retry_after` contains a delay in seconds when available. |
-| `TransportError` | A connection, timeout, or other HTTP transport failure after allowed retries. |
-| `ResponseError` | Invalid JSON or an unexpected successful response shape. |
+| `APIError` | Unsuccessful HTTP response, including redirects; exposes `status_code` and `operation_id`. |
+| `AuthenticationError` | Missing or rejected credentials/permissions. |
+| `InsufficientCreditsError` | HTTP 402; safe `required_credits`, `available_credits`, and `operation_id` attributes. |
+| `RateLimitError` | HTTP 429 outside the retry policy; `retry_after` is seconds when available. |
+| `TransportError` | Connection/timeout failure after bounded retries; preserves `operation_id`. |
+| `ResponseError` | Invalid JSON or an unexpected public response shape. |
 
 ```python
-from sentichain import AuthenticationError, Client, RateLimitError, SentiChainError
+import os
+
+from sentichain import Client, InsufficientCreditsError, SentiChainError
 
 try:
-    with Client() as client:
-        print(client.get_chain_length(network="mainnet"))
-except AuthenticationError:
-    print("Check API access before retrying")
-except RateLimitError as error:
-    print("Rate limited; retry delay:", error.retry_after)
+    with Client(api_key=os.environ["YOTOTEC_API_KEY"]) as client:
+        block = client.get_last_block("mainnet")
+except InsufficientCreditsError as error:
+    print("Required:", error.required_credits, "Available:", error.available_credits)
 except SentiChainError:
     print("The request could not be completed")
 ```
+
+Migration requires a permanent Yototec key, ordered-list iteration for `transactions`, and full matrix reads. `get_user_info`, both mapper content methods, `get_reasoning_match_chunk_end`, and `analytics_base_url` have been removed. Use Yototec Credits for account access and the SentiMove client combined report interface for intelligence purchases. Retired mapper/source/component routes do not provide an alternate raw or unpaid read. The lightweight SDK contains no network writer; operational ingestion clients must send the new Bearer key while retaining their existing blockchain signing keys and canonical transaction payloads.
 
 ## Key and transaction helpers
 
